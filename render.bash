@@ -1,22 +1,33 @@
-#!/bin/ksh
+#!/bin/bash
 
 . $(dirname "$0")/conf.sh
 
 TMP_UNPROCESSED="${TMPDIR}unprocessed.txt"
 TMP_CONCAT="${TMPDIR}concat.txt"
-TMP_APPEND="${TMPDIR}append.mp4"
-TMP_TIMELAPSE="${TMPDIR}timelapse.mp4"
+TMP_APPEND="${TMPDIR}append.hevc"
+TMP_TIMELAPSE="${TMPDIR}timelapse.hevc"
 
 # Foreach line
 while read line; do
-	set -A wcparam $line
+	# Skip empty lines
+	if [ -z "$line" ]; then
+		continue
+	fi
+
+	# Skip commented-out lines
+	firstchar=$(printf %.1s "$line")
+	if [ "$firstchar" = '#' ]; then
+		continue
+	fi
+
+	read -a wcparam <<< "$line"
 
 	# $wcparam[0] = camera name
 	# $wcparam[1] = JPEG quality
 	# $wcparam[2] = ffmpeg -crf value of the timelapse video
 	# $wcparam[3] = RTSP stream URI
 
-	TIMELAPSE="${WORKDIR}${wcparam[0]}/timelapse.mp4"
+	TIMELAPSE="${WORKDIR}${wcparam[0]}/timelapse.hevc"
 	UNPROCESSED="${WORKDIR}${wcparam[0]}/unprocessed.txt"
 
 	printf "file '$TIMELAPSE'\nfile '$TMP_APPEND'" > "$TMP_CONCAT"

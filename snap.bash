@@ -1,13 +1,24 @@
-#!/bin/ksh
+#!/bin/bash
 
 . $(dirname "$0")/conf.sh
 
 # Get current date and time
-DATETIME=$(date '+%Y-%m-%d_%H-%M')
+DATETIME=$(date '+%Y%m%d%H%M')
 
 # Foreach webcam entry
 while read line; do
-	set -A wcparam $line
+	# Skip empty lines
+	if [ -z "$line" ]; then
+		continue
+	fi
+
+	# Skip commented-out lines
+	firstchar=$(printf %.1s "$line")
+	if [ "$firstchar" = '#' ]; then
+		continue
+	fi
+
+	read -a wcparam <<< "$line"
 
 	# $wcparam[0] = camera name
 	# $wcparam[1] = JPEG quality
@@ -18,7 +29,7 @@ while read line; do
 	IMGDIR="${CAMDIR}img/"
 	IMG="${IMGDIR}${DATETIME}.jpg"
 	mkdir -m 700 -p "$IMGDIR"
-	"$FFMPEG" $FFMPEG_COMMON -skip_frame nokey -i "${wcparam[3]}" -vsync vfr -f image2 -q:v ${wcparam[1]} -frames:v 1 "$IMG" &
+	"$FFMPEG" $FFMPEG_COMMON -rtsp_transport tcp -skip_frame nokey -i "${wcparam[3]}" -fps_mode vfr -f image2 -q:v ${wcparam[1]} -frames:v 1 "$IMG" &
 	echo "file '$IMG'" >> "${CAMDIR}/unprocessed.txt"
 done < "$CAMERA_LIST"
 

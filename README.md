@@ -1,8 +1,9 @@
-# cesium webcam timelapse
-Shell script-based routine that takes snapshots from IP webcams and periodically creates a timelapse video using FFmpeg.
+# cesium RTSP timelapse
+Shell script-based routine that takes full-resolution snapshots from IP cam RTSP stream and periodically creates a HEVC timelapse video using FFmpeg.
 
 ## Prerequisities
-Korn shell `ksh` (OpenBSD's default shell)
+- Shell - `bash` or Korn shell `ksh` (OpenBSD's default shell)
+- `ffmpeg` installed from package system or [built with required flags](#compiling-custom-ffmpeg).
 
 ## Installation
 ### System user
@@ -13,12 +14,20 @@ Korn shell `ksh` (OpenBSD's default shell)
 ### Clone & file copy
 
 	cd /tmp/
-	git clone https://github.com/cesiumcz/webcam-timelapse.git
+	git clone https://github.com/cesiumcz/rtsp-timelapse.git
+
+Determine correct version `bash`/`ksh`:
+
+	mv snap.(bash|ksh) snap.sh
+	mv render.(bash|ksh) render.sh
+
+Install the scripts and set correct permissions
+
 	install -d -m 755 -o root -g _webcam /usr/local/webcam/
 	install -m 770 -o root -g _webcam conf.sh /usr/local/webcam/
 	install -m 754 -o root -g _webcam snap.sh /usr/local/webcam/
 	install -m 754 -o root -g _webcam render.sh /usr/local/webcam/
-	rm -rf /tmp/webcam-timelapse/
+	rm -rf /tmp/rtsp-timelapse/
 
 ### Configuration
 #### Paths
@@ -39,6 +48,8 @@ For each webcam, insert a line according to the following syntax:
   **Once a snapshot is taken, its quality cannot be increased.**
 - *ffmpeg_crf* = Use Constant Rate Factor (CRF) to control the quality of the timelapse video. The default is 28. See [H.265 documentation](https://trac.ffmpeg.org/wiki/Encode/H.265).
 - *rtsp_uri* = RTSP stream URI
+
+A line starting with `#` is ignored.
 
 Example contents of `cameras.txt`
 
@@ -67,7 +78,7 @@ Users are discouraged to execute a such operation on a production machine. Use a
 
 Transfer the archive to dedicated machine and reencode the video
 
-	ffmpeg -pattern_type glob -i "cam1/img/*.jpg" -r <FFMPEG_FPS> -c:v libx265 -crf <CRF> -preset <PRESET> -pix_fmt yuv420p cam1/timelapse.mp4
+	ffmpeg -pattern_type glob -i "cam1/img/*.jpg" -r <FFMPEG_FPS> -c:v libx265 -crf <CRF> -preset <PRESET> -pix_fmt yuv420p cam1/timelapse.hevc
 
 ...and place the video back on the server
 
@@ -76,7 +87,7 @@ Transfer the archive to dedicated machine and reencode the video
 	su -l _webcam /usr/local/webcam/snap.sh
 	su -l _webcam /usr/local/webcam/render.sh
 
-Or alternative using `doas` command:
+[Alternatively] using `doas` command:
 
 	doas -u _webcam /usr/local/webcam/snap.sh
 
@@ -97,19 +108,53 @@ Or alternative using `doas` command:
 	/var/webcam/
 	|-- cam1
 	|   |-- img
-	|   |   |-- 2022-08-24_10-00.jpg
-	|   |   `-- 2022-08-24_11-00.jpg
-	|   |-- timelapse.mp4
+	|   |   |-- 202402041000.jpg
+	|   |   `-- 202402041100.jpg
+	|   |-- timelapse.hevc
 	|   `-- unprocessed.txt
 	`-- cam2
 	    |-- img
-	    |   |-- 2022-08-24_10-00.jpg
-	    |   `-- 2022-08-24_11-00.jpg
-	    |-- timelapse.mp4
+	    |   |-- 202402041000.jpg
+	    |   `-- 202402041100.jpg
+	    |-- timelapse.hevc
 	    `-- unprocessed.txt
 
+## Compiling custom `ffmpeg`
+Below is the very minimal build configuration needed to run `rtsp-timelapse` with H.264 and H.265 cameras. It produces ~4.8 MiB executable for amd64 with `gcc`. This may be useful for resource-limited or security-oriented scenarios.  
+
+### Prerequisities
+- [`libx264`](https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu#libx264)
+- [`libx265`](https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu#libx265)
+
+In case you do not need timelapse video generation, you can omit `--enable-encoder=libx265`, `--enable-demuxer=concat`, `--enable-decoder=mjpeg`, `--enable-muxer=hevc`.  
+Furthermore, you can choose `libx264/h264` / `libx265/h265` according to your IP camera capabilities.
+```
+cd /tmp
+git clone https://github.com/FFmpeg/FFmpeg.git
+cd FFmpeg
+
+./configure \
+  --enable-gpl --enable-version3 \
+  --enable-libopenjpeg --enable-libx264 --enable-libx265 \
+  --disable-ffplay --disable-ffprobe --disable-doc \
+  --disable-logging --disable-debug \
+  --disable-iconv --disable-lzma --disable-zlib \
+  --disable-swresample --disable-postproc --disable-pixelutils \
+  --disable-everything \
+  --enable-encoder=mjpeg --enable-encoder=libx265 \
+  --enable-decoder=h264 --enable-decoder=hevc --enable-decoder=mjpeg \
+  --enable-protocol=concat --enable-protocol=file --enable-protocol=tcp --enable-protocol=udp \
+  --enable-muxer=rtsp --enable-muxer=image2 --enable-muxer=hevc \
+  --enable-demuxer=rtsp --enable-demuxer=concat --enable-demuxer=image2 \
+  --enable-filter=scale \
+  --enable-parser=h264 --enable-parser=hevc
+
+make -j4
+make install
+```
+
 ## Author
-[Matyáš Vohralík](https://mv.cesium.cz), 2022
+[Matyáš Vohralík](https://mv.cesium.cz), 2024
 
 ## License
 [BSD 3-Clause](LICENSE)
